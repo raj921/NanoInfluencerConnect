@@ -145,8 +145,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async searchCreators(filters: any): Promise<Creator[]> {
-    let query = db.select().from(creators);
-    
     const conditions = [];
     
     if (filters.niche) {
@@ -165,8 +163,10 @@ export class DatabaseStorage implements IStorage {
       conditions.push(gte(creators.avgEngagementRate, filters.minEngagement));
     }
     
+    const query = db.select().from(creators);
+    
     if (conditions.length > 0) {
-      query = query.where(and(...conditions));
+      return await query.where(and(...conditions)).orderBy(desc(creators.rating));
     }
     
     return await query.orderBy(desc(creators.rating));
@@ -209,30 +209,47 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCampaigns(filters?: any): Promise<Campaign[]> {
-    let query = db.select().from(campaigns);
-    
     const conditions = [eq(campaigns.status, "active")];
     
     if (filters?.industry) {
       // Join with brands to filter by industry
-      query = db.select().from(campaigns)
+      const result = await db.select({
+        id: campaigns.id,
+        brandId: campaigns.brandId,
+        title: campaigns.title,
+        description: campaigns.description,
+        requirements: campaigns.requirements,
+        budget: campaigns.budget,
+        platforms: campaigns.platforms,
+        targetAudience: campaigns.targetAudience,
+        deliverables: campaigns.deliverables,
+        deadline: campaigns.deadline,
+        status: campaigns.status,
+        applicationsCount: campaigns.applicationsCount,
+        selectedCreators: campaigns.selectedCreators,
+        createdAt: campaigns.createdAt,
+        updatedAt: campaigns.updatedAt
+      })
+        .from(campaigns)
         .innerJoin(brands, eq(campaigns.brandId, brands.id))
-        .where(and(eq(campaigns.status, "active"), eq(brands.industry, filters.industry)));
-      return await query.orderBy(desc(campaigns.createdAt));
+        .where(and(eq(campaigns.status, "active"), eq(brands.industry, filters.industry)))
+        .orderBy(desc(campaigns.createdAt));
+      return result;
     }
     
     if (filters?.search) {
-      conditions.push(or(
+      const searchCondition = or(
         like(campaigns.title, `%${filters.search}%`),
         like(campaigns.description, `%${filters.search}%`)
-      ));
+      );
+      if (searchCondition) {
+        conditions.push(searchCondition);
+      }
     }
     
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-    
-    return await query.orderBy(desc(campaigns.createdAt));
+    return await db.select().from(campaigns)
+      .where(and(...conditions))
+      .orderBy(desc(campaigns.createdAt));
   }
 
   async getBrandCampaigns(brandId: number): Promise<Campaign[]> {
@@ -307,10 +324,26 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getBrandCollaborations(brandId: number): Promise<Collaboration[]> {
-    return await db.select().from(collaborations)
+    const result = await db.select({
+      id: collaborations.id,
+      campaignId: collaborations.campaignId,
+      creatorId: collaborations.creatorId,
+      agreedRate: collaborations.agreedRate,
+      workflowStatus: collaborations.workflowStatus,
+      contentSubmissions: collaborations.contentSubmissions,
+      feedback: collaborations.feedback,
+      revisionHistory: collaborations.revisionHistory,
+      finalContent: collaborations.finalContent,
+      publishedAt: collaborations.publishedAt,
+      completedAt: collaborations.completedAt,
+      createdAt: collaborations.createdAt,
+      updatedAt: collaborations.updatedAt
+    })
+      .from(collaborations)
       .innerJoin(campaigns, eq(collaborations.campaignId, campaigns.id))
       .where(eq(campaigns.brandId, brandId))
       .orderBy(desc(collaborations.createdAt));
+    return result;
   }
 
   async updateCollaboration(id: number, data: Partial<InsertCollaboration>): Promise<Collaboration> {
@@ -364,15 +397,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCreatorPayments(creatorId: number): Promise<Payment[]> {
-    return await db.select().from(payments)
+    const result = await db.select({
+      id: payments.id,
+      collaborationId: payments.collaborationId,
+      amount: payments.amount,
+      platformCommission: payments.platformCommission,
+      creatorEarnings: payments.creatorEarnings,
+      status: payments.status,
+      paymentMethod: payments.paymentMethod,
+      transactionId: payments.transactionId,
+      paidAt: payments.paidAt,
+      createdAt: payments.createdAt
+    })
+      .from(payments)
       .innerJoin(collaborations, eq(payments.collaborationId, collaborations.id))
       .where(eq(collaborations.creatorId, creatorId))
       .orderBy(desc(payments.createdAt));
+    return result;
   }
 
   // Analytics operations
-  async createAnalytics(analytics: InsertAnalytics): Promise<Analytics> {
-    const [newAnalytics] = await db.insert(analytics).values(analytics).returning();
+  async createAnalytics(analyticsData: InsertAnalytics): Promise<Analytics> {
+    const [newAnalytics] = await db.insert(analytics).values(analyticsData).returning();
     return newAnalytics;
   }
 

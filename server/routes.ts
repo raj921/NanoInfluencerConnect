@@ -270,7 +270,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const creator = await storage.getCreator(userId);
       const brand = await storage.getBrand(userId);
       
-      let collaborations = [];
+      let collaborations: any[] = [];
       
       if (creator) {
         collaborations = await storage.getCreatorCollaborations(creator.id);
@@ -435,12 +435,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         switch (data.type) {
           case 'join_collaboration':
             // Join a collaboration room for real-time updates
-            ws.collaborationId = data.collaborationId;
+            (ws as any).collaborationId = data.collaborationId;
             break;
           case 'typing':
             // Broadcast typing indicators
             wss.clients.forEach((client) => {
-              if (client !== ws && client.readyState === WebSocket.OPEN && client.collaborationId === data.collaborationId) {
+              if (client !== ws && client.readyState === WebSocket.OPEN && (client as any).collaborationId === data.collaborationId) {
                 client.send(JSON.stringify({
                   type: 'typing',
                   userId: data.userId,
